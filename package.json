@@ -1,0 +1,16 @@
+{
+  "name": "purescript-node-jwt",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "build": "spago -x spago.dhall build",
+    "test": "spago -x test.dhall test",
+    "docs": "spago -x test.dhall docs"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^8.5.1"
+  },
+  "devDependencies": {
+    "spago": "^0.15.3"
+  }
+}

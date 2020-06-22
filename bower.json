@@ -1,0 +1,26 @@
+{
+    "name": "purescript-node-jwt",
+    "license": [
+        "MIT"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/gaku-sei/purescript-node-jwt"
+    },
+    "ignore": [
+        "**/.*",
+        "node_modules",
+        "bower_components",
+        "output"
+    ],
+    "dependencies": {
+        "purescript-aff": "^v5.1.2",
+        "purescript-aff-promise": "^v2.1.0",
+        "purescript-console": "^v4.4.0",
+        "purescript-effect": "^v2.0.1",
+        "purescript-foreign-generic": "^v10.0.0",
+        "purescript-generics-rep": "^v6.1.1",
+        "purescript-newtype": "^v3.0.0",
+        "purescript-psci-support": "^v4.0.0"
+    }
+}
