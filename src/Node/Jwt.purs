@@ -4,7 +4,6 @@ module Node.Jwt
   , JOSEHeaders
   , NumericDate(..)
   , Secret(..)
-  , ShowableForeign
   , Token
   , Typ(..)
   , Unverified
@@ -15,11 +14,9 @@ module Node.Jwt
   , defaultHeaders
   , headers
   , sign
-  , unregisteredClaim
   , verify
   ) where
 
-import Prelude
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (runExcept)
@@ -30,24 +27,17 @@ import Data.Function.Uncurried (Fn3, Fn4, runFn3, runFn4)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.List.NonEmpty (NonEmptyList, singleton)
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Traversable (traverse)
 import Effect.Aff (Aff)
 import Effect.Uncurried (EffectFn3, runEffectFn3)
 import Foreign (ForeignError(..), readArray, readInt, readNullOrUndefined, readString, renderForeignError)
 import Foreign.Generic (class Decode, class Encode, F, Foreign, encode)
-import Foreign.Generic (decode) as Foreign.Generic
+import Foreign.Generic (decode) as Generic
 import Foreign.Index ((!))
 import Foreign.NullOrUndefined (undefined)
-
-newtype ShowableForeign
-  = ShowableForeign Foreign
-
-derive instance newtypeShowableForeign :: Newtype ShowableForeign _
-
-instance showShowableForeign :: Show ShowableForeign where
-  show = const "<foreign value>"
+import Prelude (class Eq, class Ord, class Show, Unit, bind, map, pure, show, ($), (<$>), (<<<), (<>), (=<<), (>=>), (>>=), (>>>))
 
 newtype EitherWrapper a b
   = EitherWrapper (Either a b)
@@ -69,11 +59,10 @@ data Verified
 
 data Unverified
 
-newtype Token s
+newtype Token a s
   = Token Foreign
 
-derive instance newtypeToken :: Newtype (Token s) _
-
+-- TODO: Use DateTime/Instant
 newtype NumericDate
   = NumericDate Int
 
@@ -88,6 +77,9 @@ instance showNumericDate :: Show NumericDate where
 
 instance decodeNumericDate :: Decode NumericDate where
   decode = readInt >=> pure <<< NumericDate
+
+instance encodeNumericDate :: Encode NumericDate where
+  encode = unwrap >>> encode
 
 data Algorithm
   = HS256
@@ -155,7 +147,7 @@ type JOSEHeaders
 defaultHeaders :: JOSEHeaders
 defaultHeaders = { typ: JWT, cty: Nothing, alg: HS256, kid: Nothing }
 
-type Claims
+type Claims a
   = { iss :: Maybe String
     , sub :: Maybe String
     , aud :: Maybe (Either String (Array String))
@@ -163,10 +155,10 @@ type Claims
     , nbf :: Maybe NumericDate
     , iat :: Maybe NumericDate
     , jti :: Maybe String
-    , unregistered :: Maybe ShowableForeign
+    , unregistered :: Maybe a
     }
 
-defaultClaims :: Claims
+defaultClaims :: Claims Unit
 defaultClaims =
   { iss: Nothing
   , sub: Nothing
@@ -178,57 +170,48 @@ defaultClaims =
   , unregistered: Nothing
   }
 
-unregisteredClaim :: forall a. Encode a => a -> Maybe ShowableForeign
-unregisteredClaim = Just <<< wrap <<< encode
-
 newtype Secret
   = Secret String
 
 derive instance newtypeSecret :: Newtype Secret _
 
-claims :: forall s. Token s -> Either (NonEmptyList String) (Claims)
+claims :: forall a s. Decode a => Token a s -> Either (NonEmptyList String) (Claims a)
 claims (Token token) =
   map renderForeignError
     `lmap`
       runExcept do
-        iat <- token ! "payload" ! "iat" >>= readNullOrUndefined >>= traverse Foreign.Generic.decode
-        nbf <- token ! "payload" ! "nbf" >>= readNullOrUndefined >>= traverse Foreign.Generic.decode
-        exp <- token ! "payload" ! "exp" >>= readNullOrUndefined >>= traverse Foreign.Generic.decode
+        iat <- token ! "payload" ! "iat" >>= readNullOrUndefined >>= traverse Generic.decode
+        nbf <- token ! "payload" ! "nbf" >>= readNullOrUndefined >>= traverse Generic.decode
+        exp <- token ! "payload" ! "exp" >>= readNullOrUndefined >>= traverse Generic.decode
         aud <-
           ( token ! "payload" ! "aud" >>= readNullOrUndefined
-              >>= traverse Foreign.Generic.decode ::
+              >>= traverse Generic.decode ::
               F (Maybe (EitherWrapper String (Array String)))
           )
         iss <- token ! "payload" ! "iss" >>= readNullOrUndefined >>= traverse readString
         sub <- token ! "payload" ! "sub" >>= readNullOrUndefined >>= traverse readString
         jti <- token ! "payload" ! "jti" >>= readNullOrUndefined >>= traverse readString
-        unregistered <- token ! "payload" ! "unregistered" >>= readNullOrUndefined
-        pure { iat, nbf, exp, aud: unwrap <$> aud, iss, sub, jti, unregistered: wrap <$> unregistered }
+        (unregistered :: Maybe a) <- token ! "payload" ! "unregistered" >>= readNullOrUndefined >>= traverse Generic.decode
+        pure { iat, nbf, exp, aud: unwrap <$> aud, iss, sub, jti, unregistered }
 
-headers :: forall s. Token s -> Either (NonEmptyList String) JOSEHeaders
+headers :: forall a s. Token a s -> Either (NonEmptyList String) JOSEHeaders
 headers (Token token) =
   map renderForeignError
     `lmap`
       runExcept do
-        alg <- token ! "header" ! "alg" >>= Foreign.Generic.decode
-        typ <- token ! "header" ! "typ" >>= Foreign.Generic.decode
+        alg <- token ! "header" ! "alg" >>= Generic.decode
+        typ <- token ! "header" ! "typ" >>= Generic.decode
         kid <- token ! "header" ! "kid" >>= readNullOrUndefined >>= traverse readString
-        cty <- token ! "header" ! "cty" >>= readNullOrUndefined >>= traverse Foreign.Generic.decode
+        cty <- token ! "header" ! "cty" >>= readNullOrUndefined >>= traverse Generic.decode
         pure { alg, typ, kid, cty }
 
 foreign import _sign :: EffectFn3 Foreign String Foreign (Promise String)
 
-sign :: Secret -> JOSEHeaders -> Claims -> Aff String
+sign :: forall a. Encode a => Secret -> JOSEHeaders -> Claims a -> Aff String
 sign (Secret secret) { typ, cty, alg, kid } { iss, sub, aud, exp, nbf, iat, jti, unregistered } =
   toAffE
     $ runEffectFn3 _sign
-        ( encode
-            $ { iat: unwrap <$> iat
-              , nbf: unwrap <$> nbf
-              , exp: unwrap <$> exp
-              , unregistered: fromMaybe undefined $ unwrap <$> unregistered
-              }
-        )
+        (encode $ { iat, nbf, exp, unregistered: maybe undefined encode unregistered })
         secret
     $ encode
         ( { algorithm: show alg
@@ -243,22 +226,24 @@ sign (Secret secret) { typ, cty, alg, kid } { iss, sub, aud, exp, nbf, iat, jti,
         )
 
 foreign import _decode ::
+  forall a.
   Fn3
-    (Token Unverified -> Maybe (Token Unverified))
-    (Maybe (Token Unverified))
+    (Token a Unverified -> Maybe (Token a Unverified))
+    (Maybe (Token a Unverified))
     String
-    (Maybe (Token Unverified))
+    (Maybe (Token a Unverified))
 
-decode :: String -> Maybe (Token Unverified)
+decode :: forall a. String -> Maybe (Token a Unverified)
 decode = runFn3 _decode Just Nothing
 
 foreign import _verify ::
+  forall a.
   Fn4
-    (Token Verified -> Maybe (Token Verified))
-    (Maybe (Token Verified))
+    (Token a Verified -> Maybe (Token a Verified))
+    (Maybe (Token a Verified))
     String
     String
-    (Maybe (Token Verified))
+    (Maybe (Token a Verified))
 
-verify :: Secret -> String -> Maybe (Token Verified)
+verify :: forall a. Secret -> String -> Maybe (Token a Verified)
 verify (Secret secret) = runFn4 _verify Just Nothing secret
