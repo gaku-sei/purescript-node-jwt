@@ -8,11 +8,9 @@ module Node.Jwt
   , Typ(..)
   , Unverified
   , Verified
-  , claims
   , decode
   , defaultClaims
   , defaultHeaders
-  , headers
   , sign
   , verify
   ) where
@@ -24,7 +22,7 @@ import Control.Promise (Promise, toAffE)
 import Data.Bifunctor (lmap)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (fromDateTime, instant, toDateTime, unInstant)
-import Data.Either (Either(..))
+import Data.Either (Either(..), note)
 import Data.Function.Uncurried (Fn3, Fn4, runFn3, runFn4)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
@@ -40,7 +38,7 @@ import Foreign.Generic (class Decode, class Encode, F, Foreign, encode)
 import Foreign.Generic (decode) as Generic
 import Foreign.Index ((!))
 import Foreign.NullOrUndefined (undefined)
-import Prelude (class Eq, class Ord, class Show, Unit, bind, map, pure, show, ($), (/), (*), (<$>), (<<<), (<>), (=<<), (>=>), (>>=), (>>>))
+import Prelude (class Eq, class Ord, class Show, Void, bind, map, pure, show, ($), (*), (/), (<$>), (<*>), (<<<), (<>), (=<<), (>=>), (>>=), (>>>))
 
 newtype EitherWrapper a b
   = EitherWrapper (Either a b)
@@ -57,13 +55,6 @@ instance decodeEitherWrapper :: Decode (EitherWrapper String (Array String)) whe
     pure <<< wrap
       =<< (pure <<< Left =<< readString value)
       <|> (pure <<< Right =<< traverse readString =<< readArray value)
-
-data Verified
-
-data Unverified
-
-newtype Token a s
-  = Token Foreign
 
 newtype NumericDate
   = NumericDate DateTime
@@ -164,7 +155,16 @@ type Claims a
     , unregistered :: Maybe a
     }
 
-defaultClaims :: Claims Unit
+data Verified
+
+data Unverified
+
+type Token a s
+  = { headers :: JOSEHeaders
+    , claims :: Claims a
+    }
+
+defaultClaims :: Claims Void
 defaultClaims =
   { iss: Nothing
   , sub: Nothing
@@ -181,35 +181,33 @@ newtype Secret
 
 derive instance newtypeSecret :: Newtype Secret _
 
-claims :: forall a s. Decode a => Token a s -> Either (NonEmptyList String) (Claims a)
-claims (Token token) =
-  map renderForeignError
-    `lmap`
-      runExcept do
-        iat <- token ! "payload" ! "iat" >>= readNullOrUndefined >>= traverse Generic.decode
-        nbf <- token ! "payload" ! "nbf" >>= readNullOrUndefined >>= traverse Generic.decode
-        exp <- token ! "payload" ! "exp" >>= readNullOrUndefined >>= traverse Generic.decode
-        aud <-
-          ( token ! "payload" ! "aud" >>= readNullOrUndefined
-              >>= traverse Generic.decode ::
-              F (Maybe (EitherWrapper String (Array String)))
-          )
-        iss <- token ! "payload" ! "iss" >>= readNullOrUndefined >>= traverse readString
-        sub <- token ! "payload" ! "sub" >>= readNullOrUndefined >>= traverse readString
-        jti <- token ! "payload" ! "jti" >>= readNullOrUndefined >>= traverse readString
-        (unregistered :: Maybe a) <- token ! "payload" ! "unregistered" >>= readNullOrUndefined >>= traverse Generic.decode
-        pure { iat, nbf, exp, aud: unwrap <$> aud, iss, sub, jti, unregistered }
+-- Extract JWT claims from any foreign value
+claims :: forall a. Decode a => Foreign -> Either (NonEmptyList ForeignError) (Claims a)
+claims token =
+  runExcept do
+    iat <- token ! "payload" ! "iat" >>= readNullOrUndefined >>= traverse Generic.decode
+    nbf <- token ! "payload" ! "nbf" >>= readNullOrUndefined >>= traverse Generic.decode
+    exp <- token ! "payload" ! "exp" >>= readNullOrUndefined >>= traverse Generic.decode
+    aud <-
+      ( token ! "payload" ! "aud" >>= readNullOrUndefined
+          >>= traverse Generic.decode ::
+          F (Maybe (EitherWrapper String (Array String)))
+      )
+    iss <- token ! "payload" ! "iss" >>= readNullOrUndefined >>= traverse readString
+    sub <- token ! "payload" ! "sub" >>= readNullOrUndefined >>= traverse readString
+    jti <- token ! "payload" ! "jti" >>= readNullOrUndefined >>= traverse readString
+    (unregistered :: Maybe a) <- token ! "payload" ! "unregistered" >>= readNullOrUndefined >>= traverse Generic.decode
+    pure { iat, nbf, exp, aud: unwrap <$> aud, iss, sub, jti, unregistered }
 
-headers :: forall a s. Token a s -> Either (NonEmptyList String) JOSEHeaders
-headers (Token token) =
-  map renderForeignError
-    `lmap`
-      runExcept do
-        alg <- token ! "header" ! "alg" >>= Generic.decode
-        typ <- token ! "header" ! "typ" >>= Generic.decode
-        kid <- token ! "header" ! "kid" >>= readNullOrUndefined >>= traverse readString
-        cty <- token ! "header" ! "cty" >>= readNullOrUndefined >>= traverse Generic.decode
-        pure { alg, typ, kid, cty }
+-- Extract JWT headers from any foreign value
+headers :: Foreign -> Either (NonEmptyList ForeignError) JOSEHeaders
+headers token =
+  runExcept do
+    alg <- token ! "header" ! "alg" >>= Generic.decode
+    typ <- token ! "header" ! "typ" >>= Generic.decode
+    kid <- token ! "header" ! "kid" >>= readNullOrUndefined >>= traverse readString
+    cty <- token ! "header" ! "cty" >>= readNullOrUndefined >>= traverse Generic.decode
+    pure { alg, typ, kid, cty }
 
 foreign import _sign :: EffectFn3 Foreign String Foreign (Promise String)
 
@@ -231,25 +229,19 @@ sign (Secret secret) { typ, cty, alg, kid } { iss, sub, aud, exp, nbf, iat, jti,
           }
         )
 
-foreign import _decode ::
-  forall a.
-  Fn3
-    (Token a Unverified -> Maybe (Token a Unverified))
-    (Maybe (Token a Unverified))
-    String
-    (Maybe (Token a Unverified))
+-- Utility function used to automatically convert any foreign value into a token
+foreignToToken :: forall a s. Decode a => Foreign -> Either (NonEmptyList String) (Token a s)
+foreignToToken value =
+  { headers: _, claims: _ }
+    <$> (map renderForeignError `lmap` headers value)
+    <*> (map renderForeignError `lmap` claims value)
 
-decode :: forall a. String -> Maybe (Token a Unverified)
-decode = runFn3 _decode Just Nothing
+foreign import _decode :: Fn3 (Foreign -> Maybe Foreign) (Maybe Foreign) String (Maybe Foreign)
 
-foreign import _verify ::
-  forall a.
-  Fn4
-    (Token a Verified -> Maybe (Token a Verified))
-    (Maybe (Token a Verified))
-    String
-    String
-    (Maybe (Token a Verified))
+decode :: forall a. Decode a => String -> Either (NonEmptyList String) (Token a Unverified)
+decode s = (note (singleton "Couldn't decode token") $ runFn3 _decode Just Nothing s) >>= foreignToToken
 
-verify :: forall a. Secret -> String -> Maybe (Token a Verified)
-verify (Secret secret) = runFn4 _verify Just Nothing secret
+foreign import _verify :: Fn4 (Foreign -> Maybe Foreign) (Maybe Foreign) String String (Maybe Foreign)
+
+verify :: forall a. Decode a => Secret -> String -> Either (NonEmptyList String) (Token a Verified)
+verify (Secret secret) s = (note (singleton "Couldn't verify token") $ runFn4 _verify Just Nothing secret s) >>= foreignToToken
