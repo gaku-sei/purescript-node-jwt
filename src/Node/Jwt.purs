@@ -22,22 +22,25 @@ import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise, toAffE)
 import Data.Bifunctor (lmap)
+import Data.DateTime (DateTime)
+import Data.DateTime.Instant (fromDateTime, instant, toDateTime, unInstant)
 import Data.Either (Either(..))
 import Data.Function.Uncurried (Fn3, Fn4, runFn3, runFn4)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
+import Data.Int (floor)
 import Data.List.NonEmpty (NonEmptyList, singleton)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Traversable (traverse)
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, Milliseconds(..))
 import Effect.Uncurried (EffectFn3, runEffectFn3)
-import Foreign (ForeignError(..), readArray, readInt, readNullOrUndefined, readString, renderForeignError)
+import Foreign (ForeignError(..), readArray, readNullOrUndefined, readNumber, readString, renderForeignError)
 import Foreign.Generic (class Decode, class Encode, F, Foreign, encode)
 import Foreign.Generic (decode) as Generic
 import Foreign.Index ((!))
 import Foreign.NullOrUndefined (undefined)
-import Prelude (class Eq, class Ord, class Show, Unit, bind, map, pure, show, ($), (<$>), (<<<), (<>), (=<<), (>=>), (>>=), (>>>))
+import Prelude (class Eq, class Ord, class Show, Unit, bind, map, pure, show, ($), (/), (*), (<$>), (<<<), (<>), (=<<), (>=>), (>>=), (>>>))
 
 newtype EitherWrapper a b
   = EitherWrapper (Either a b)
@@ -62,9 +65,8 @@ data Unverified
 newtype Token a s
   = Token Foreign
 
--- TODO: Use DateTime/Instant
 newtype NumericDate
-  = NumericDate Int
+  = NumericDate DateTime
 
 derive instance newtypeNumericDate :: Newtype NumericDate _
 
@@ -76,10 +78,14 @@ instance showNumericDate :: Show NumericDate where
   show = unwrap >>> show
 
 instance decodeNumericDate :: Decode NumericDate where
-  decode = readInt >=> pure <<< NumericDate
+  decode =
+    readNumber >=> (_ * 1000.0) >>> Milliseconds >>> instant
+      >>> maybe
+          (throwError $ singleton $ ForeignError "Number value couldn't be turned into Instant")
+          (toDateTime >>> NumericDate >>> pure)
 
 instance encodeNumericDate :: Encode NumericDate where
-  encode = unwrap >>> encode
+  encode = unwrap >>> fromDateTime >>> unInstant >>> unwrap >>> (_ / 1000.0) >>> floor >>> encode
 
 data Algorithm
   = HS256

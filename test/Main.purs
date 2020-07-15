@@ -1,21 +1,21 @@
 module Test.Main where
 
 import Control.Monad.Except (runExcept)
-import Data.DateTime.Instant (unInstant)
+import Data.DateTime (DateTime, adjust, modifyTime, setMillisecond)
+import Data.DateTime.Instant (instant, toDateTime)
 import Data.Either (Either(..), hush)
-import Data.Int (round)
-import Data.Maybe (Maybe(..))
-import Data.Newtype (unwrap, wrap)
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
+import Data.Newtype (wrap)
 import Data.Symbol (SProxy(..))
+import Data.Time.Duration (Seconds(..))
 import Data.Traversable (traverse)
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
-import Effect.Class (liftEffect)
+import Effect.Aff (Milliseconds(..), launchAff_)
+import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Now (now)
 import Foreign (readString)
-import Foreign.Generic (class Decode)
 import Node.Jwt (Algorithm(..), NumericDate(..), Secret(..), Token, Typ(..), Unverified, Verified, claims, decode, defaultClaims, defaultHeaders, headers, sign, verify)
-import Prelude (Unit, bind, discard, join, (>>=), ($), (#), (<<<), (>>>), (<$>), (<#>), (/), (-), (+), (/=), (>), (<), (&&))
+import Prelude (Unit, bind, bottom, discard, join, negate, (#), ($), (/=), (<#>), (<$>), (<<<), (>>=), (>>>), (&&), (<), (>))
 import Prim.Row (class Lacks)
 import Record (delete)
 import Test.Spec (describe, it)
@@ -32,13 +32,11 @@ decodeUnregisteredClaim token =
     # (runExcept >>> hush)
     # join
 
-cleanClaims :: forall r a. Decode a => Lacks "unregistered" r => { unregistered :: a | r } -> { | r }
+cleanClaims :: forall r a. Lacks "unregistered" r => { unregistered :: a | r } -> { | r }
 cleanClaims = delete (SProxy :: SProxy "unregistered")
 
-getTimestamp :: Aff Int
-getTimestamp =
-  round <<< (_ / 1000.0) <<< unwrap <<< unInstant
-    <$> liftEffect now
+getTimestamp :: forall m. MonadEffect m => m DateTime
+getTimestamp = liftEffect $ modifyTime (setMillisecond bottom) <<< toDateTime <$> now
 
 main :: Effect Unit
 main =
@@ -81,11 +79,11 @@ main =
 
                 customClaims =
                   { aud: Just $ Right [ "foo", "bar" ]
-                  , exp: Just $ wrap 1000
+                  , exp: wrap <<< toDateTime <$> (instant $ Milliseconds 1000.0)
                   , iat: Just $ wrap timestamp
                   , iss: Just "foo"
                   , jti: Just "an id"
-                  , nbf: Just $ wrap 1000
+                  , nbf: wrap <<< toDateTime <$> (instant $ Milliseconds 1000.0)
                   , sub: Just "subject!"
                   , unregistered: Nothing :: Maybe Unit
                   }
@@ -93,6 +91,8 @@ main =
               let
                 decodedToken :: Maybe (Token Unit Unverified)
                 decodedToken = decode token
+              isJust (decodedToken >>= hush <<< claims >>= _.exp) `shouldEqual` true
+              isJust (decodedToken >>= hush <<< claims >>= _.nbf) `shouldEqual` true
               (decodedToken >>= hush <<< headers) `shouldEqual` Just customHeaders
               (decodedToken >>= hush <<< claims <#> cleanClaims)
                 `shouldEqual`
@@ -126,7 +126,9 @@ main =
                 `shouldSatisfy`
                   ( case _ of
                       Nothing -> false
-                      Just (NumericDate iat) -> timestamp > iat - 10 && timestamp < iat + 10
+                      Just (NumericDate iat) ->
+                        (timestamp > fromMaybe bottom (adjust (Seconds $ -1.0) iat))
+                          && (timestamp < fromMaybe bottom (adjust (Seconds 1.0) iat))
                   )
           describe "verify" do
             it "verifies a token with default headers, and default claims" do
@@ -179,5 +181,7 @@ main =
                 `shouldSatisfy`
                   ( case _ of
                       Nothing -> false
-                      Just (NumericDate iat) -> timestamp > iat - 10 && timestamp < iat + 10
+                      Just (NumericDate iat) ->
+                        (timestamp > fromMaybe bottom (adjust (Seconds $ -1.0) iat))
+                          && (timestamp < fromMaybe bottom (adjust (Seconds 1.0) iat))
                   )
