@@ -16,7 +16,7 @@ import Effect.Aff (Milliseconds(..))
 import Foreign (ForeignError(..), readArray, readNumber, readString)
 import Foreign.Generic (class Decode, class Encode, encode)
 import Foreign.Generic.EnumEncoding (defaultGenericEnumOptions, genericDecodeEnum, genericEncodeEnum)
-import Prelude (class Eq, class Ord, class Show, Void, pure, show, ($), (*), (/), (<<<), (=<<), (>=>), (>>>))
+import Prelude (class Eq, class Ord, class Show, pure, show, ($), (*), (/), (<<<), (=<<), (>=>), (>>>))
 
 newtype EitherWrapper a b
   = EitherWrapper (Either a b)
@@ -43,7 +43,6 @@ derive instance eqNumericDate :: Eq NumericDate
 
 derive instance ordNumericDate :: Ord NumericDate
 
--- TODO: Drop this instance when possible
 instance showNumericDate :: Show NumericDate where
   show = unwrap >>> show
 
@@ -75,7 +74,6 @@ derive instance genericAlgorithm :: Generic Algorithm _
 
 derive instance eqAlgorithm :: Eq Algorithm
 
--- TODO: Drop this instance when possible
 instance showAlgorithm :: Show Algorithm where
   show = genericShow
 
@@ -92,7 +90,6 @@ derive instance genericTyp :: Generic Typ _
 
 derive instance eqTyp :: Eq Typ
 
--- TODO: Drop this instance when possible
 instance showTyp :: Show Typ where
   show = genericShow
 
@@ -112,7 +109,7 @@ type JOSEHeaders
 defaultHeaders :: JOSEHeaders
 defaultHeaders = { typ: JWT, cty: Nothing, alg: HS256, kid: Nothing }
 
-type Claims a
+type Claims r
   = { iss :: Maybe String
     , sub :: Maybe String
     , aud :: Maybe (Either String (Array String))
@@ -120,7 +117,7 @@ type Claims a
     , nbf :: Maybe NumericDate
     , iat :: Maybe NumericDate
     , jti :: Maybe String
-    , unregistered :: Maybe a
+    , unregistered :: Maybe (Record r)
     }
 
 data Verified
@@ -132,7 +129,7 @@ type Token a s
     , claims :: Claims a
     }
 
-defaultClaims :: Claims Void
+defaultClaims :: Claims ()
 defaultClaims =
   { iss: Nothing
   , sub: Nothing

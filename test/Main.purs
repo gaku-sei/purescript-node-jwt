@@ -12,7 +12,7 @@ import Effect.Aff (Milliseconds(..), launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Now (now)
 import Node.Jwt (Algorithm(..), NumericDate(..), Secret(..), Token, Typ(..), Unverified, Verified, Claims, decode, defaultClaims, defaultHeaders, sign, verify)
-import Prelude (Unit, Void, bind, bottom, discard, negate, (#), ($), (&&), (/=), (<), (<#>), (<$>), (<<<), (>), (>>=), (>>>))
+import Prelude (Unit, bind, bottom, discard, negate, (#), ($), (&&), (/=), (<), (<#>), (<$>), (<<<), (>), (>>=), (>>>))
 import Prim.Row (class Lacks)
 import Record (delete)
 import Test.Spec (describe, it)
@@ -41,7 +41,7 @@ main =
             it "signs a token with custom unregistered claims" do
               token <-
                 sign (Secret "whatever") defaultHeaders
-                  $ defaultClaims { unregistered = Just "foo" }
+                  $ defaultClaims { unregistered = Just { foo: "bar" } }
               token `shouldSatisfy` (/=) ""
           describe "decode" do
             it "decodes a token with default headers, and default claims" do
@@ -50,29 +50,29 @@ main =
                 claims' = defaultClaims { iat = Just $ wrap timestamp }
               token <- sign (Secret "whatever") defaultHeaders claims'
               let
-                decodedToken :: Maybe (Token Void Unverified)
+                decodedToken :: Maybe (Token () Unverified)
                 decodedToken = hush $ decode token
               (decodedToken <#> _.headers) `shouldEqual` Just defaultHeaders
               (decodedToken <#> _.claims <#> cleanClaims) `shouldEqual` Just (cleanClaims claims')
             it "decodes a token with custom unregistered claims" do
               token <-
                 sign (Secret "whatever") defaultHeaders
-                  $ defaultClaims { unregistered = Just "foo" }
+                  $ defaultClaims { unregistered = Just { foo: "bar" } }
               let
                 decodedToken = hush $ decode token
               (decodedToken <#> _.headers) `shouldEqual` Just defaultHeaders
-              (decodedToken >>= _.claims >>> _.unregistered) `shouldEqual` Just "foo"
+              (decodedToken >>= _.claims >>> _.unregistered) `shouldEqual` Just { foo: "bar" }
             it "decodes a token with default headers, and default claims, with numeric date" do
               timestamp <- getTimestamp
               let
                 customHeaders = { alg: HS512, cty: Just JWT, kid: Just "a key", typ: JWT }
 
-                customClaims :: Claims Void
+                customClaims :: Claims ()
                 customClaims =
                   { aud: Just $ Right [ "foo", "bar" ]
                   , exp: wrap <<< toDateTime <$> (instant $ Milliseconds 1000.0)
                   , iat: Just $ wrap timestamp
-                  , iss: Just "foo"
+                  , iss: Just "the issuer"
                   , jti: Just "an id"
                   , nbf: wrap <<< toDateTime <$> (instant $ Milliseconds 1000.0)
                   , sub: Just "subject!"
@@ -80,7 +80,7 @@ main =
                   }
               token <- sign (Secret "whatever") customHeaders customClaims
               let
-                decodedToken :: Maybe (Token Void Unverified)
+                decodedToken :: Maybe (Token () Unverified)
                 decodedToken = hush $ decode token
               (decodedToken <#> _.claims >>= _.exp # isJust) `shouldEqual` true
               (decodedToken <#> _.claims >>= _.nbf # isJust) `shouldEqual` true
@@ -91,12 +91,12 @@ main =
               let
                 customHeaders = { alg: HS512, cty: Just JWT, kid: Just "a key", typ: JWT }
 
-                customClaims :: Claims Void
+                customClaims :: Claims ()
                 customClaims =
                   { aud: Just $ Right [ "foo", "bar" ]
                   , exp: Nothing
                   , iat: Nothing
-                  , iss: Just "foo"
+                  , iss: Just "the issuer"
                   , jti: Just "an id"
                   , nbf: Nothing
                   , sub: Just "subject!"
@@ -104,7 +104,7 @@ main =
                   }
               token <- sign (Secret "whatever") customHeaders customClaims
               let
-                decodedToken :: Maybe (Token Void Unverified)
+                decodedToken :: Maybe (Token () Unverified)
                 decodedToken = hush $ decode token
               (decodedToken <#> _.headers) `shouldEqual` Just customHeaders
               let
@@ -121,14 +121,14 @@ main =
                 claims' = defaultClaims { iat = Just $ wrap timestamp }
               token <- sign (Secret "whatever") defaultHeaders claims'
               let
-                verifiedToken :: Maybe (Token Void Verified)
+                verifiedToken :: Maybe (Token () Verified)
                 verifiedToken = hush $ verify (Secret "whatever") token
               (verifiedToken <#> _.headers) `shouldEqual` Just defaultHeaders
               (verifiedToken <#> _.claims <#> cleanClaims) `shouldEqual` Just (cleanClaims claims')
             it "doesn't verify a token when the secrets differ" do
               token <- sign (Secret "whatever") defaultHeaders defaultClaims
               let
-                verifiedToken :: Maybe (Token Void Verified)
+                verifiedToken :: Maybe (Token () Verified)
                 verifiedToken = hush $ verify (Secret "whatever!") token
               verifiedToken `shouldEqual` Nothing
               (verifiedToken <#> _.headers) `shouldEqual` Nothing
@@ -138,12 +138,12 @@ main =
               let
                 customHeaders = { alg: HS512, cty: Just JWT, kid: Just "a key", typ: JWT }
 
-                customClaims :: Claims Void
+                customClaims :: Claims ()
                 customClaims =
                   { aud: Just $ Right [ "foo", "bar" ]
                   , exp: Nothing
                   , iat: Nothing
-                  , iss: Just "foo"
+                  , iss: Just "the issuer"
                   , jti: Just "an id"
                   , nbf: Nothing
                   , sub: Just "subject!"
@@ -151,7 +151,7 @@ main =
                   }
               token <- sign (Secret "whatever") customHeaders customClaims
               let
-                verifiedToken :: Maybe (Token Void Verified)
+                verifiedToken :: Maybe (Token () Verified)
                 verifiedToken = hush $ verify (Secret "whatever") token
               (verifiedToken <#> _.headers) `shouldEqual` Just customHeaders
               let
