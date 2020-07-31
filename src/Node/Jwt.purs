@@ -1,8 +1,10 @@
 module Node.Jwt
   ( module Types
   , decode
+  , decode'
   , sign
   , verify
+  , verify'
   ) where
 
 import Types
@@ -17,10 +19,10 @@ import Data.Newtype (unwrap)
 import Data.Options (options, (:=))
 import Data.Traversable (traverse)
 import Effect.Aff (Aff)
-import Effect.Uncurried (EffectFn3, runEffectFn3)
+import Effect.Uncurried (EffectFn4, runEffectFn4)
 import Foreign (ForeignError, readNullOrUndefined, readString, renderForeignError)
 import Foreign.Generic (F, Foreign)
-import Foreign.Generic (decode) as Generic
+import Foreign.Generic (decode, encode) as Generic
 import Foreign.Index ((!))
 import Options as Options
 import Prelude (bind, map, pure, ($), (<$>), (<*>), (<>), (>>=))
@@ -41,8 +43,8 @@ claims token =
     iss <- token ! "payload" ! "iss" >>= readNullOrUndefined >>= traverse readString
     sub <- token ! "payload" ! "sub" >>= readNullOrUndefined >>= traverse readString
     jti <- token ! "payload" ! "jti" >>= readNullOrUndefined >>= traverse readString
-    (unregistered :: Maybe (Record r)) <- token ! "payload" ! "unregistered" >>= readNullOrUndefined >>= traverse Generic.decode
-    pure { iat, nbf, exp, aud: unwrap <$> aud, iss, sub, jti, unregistered }
+    unregisteredClaims <- token ! "payload" ! "unregisteredClaims" >>= readNullOrUndefined >>= traverse Generic.decode
+    pure { iat, nbf, exp, aud: unwrap <$> aud, iss, sub, jti, unregisteredClaims }
 
 -- Extract JWT headers from any foreign value
 headers :: Foreign -> Either (NonEmptyList ForeignError) JOSEHeaders
@@ -54,42 +56,38 @@ headers token =
     cty <- token ! "header" ! "cty" >>= readNullOrUndefined >>= traverse Generic.decode
     pure { alg, typ, kid, cty }
 
-foreign import _sign :: EffectFn3 Foreign String Foreign (Promise String)
+foreign import _sign :: EffectFn4 Foreign Foreign String Foreign (Promise String)
 
 sign :: forall r l. Encodable r l => Secret -> JOSEHeaders -> Claims r -> Aff String
-sign (Secret secret) { typ, cty, alg, kid } { iss, sub, aud, exp, nbf, iat, jti, unregistered } =
+sign (Secret secret) { typ, cty, alg, kid } { iss, sub, aud, exp, nbf, iat, jti, unregisteredClaims } =
   toAffE
-    $ runEffectFn3 _sign payloadOptions secret
-    $ signOptions
+    $ runEffectFn4 _sign payloadOptions (Generic.encode unregisteredClaims) secret signOptions
   where
   payloadOptions :: Foreign
   payloadOptions =
     options
-      ( (Options.iat := iat)
-          <> (Options.nbf := nbf)
-          <> (Options.exp := exp)
-          <> (Options.unregistered := unregistered)
-      )
+      $ (Options.iat := iat)
+      <> (Options.nbf := nbf)
+      <> (Options.exp := exp)
+
+  signHeaderOptions :: Foreign
+  signHeaderOptions =
+    options
+      $ (Options.typ := typ)
+      <> (Options.cty := cty)
+      <> (Options.alg := alg)
+      <> (Options.kid := kid)
 
   signOptions :: Foreign
   signOptions =
     options
-      ( (Options.algorithm := alg)
-          <> (Options.audience := aud)
-          <> (Options.issuer := iss)
-          <> (Options.jwtid := jti)
-          <> (Options.subject := sub)
-          <> (Options.keyid := kid)
-          <> ( Options.header
-                := ( options
-                      ( (Options.typ := typ)
-                          <> (Options.cty := cty)
-                          <> (Options.alg := alg)
-                          <> (Options.kid := kid)
-                      )
-                  )
-            )
-      )
+      $ (Options.algorithm := alg)
+      <> (Options.audience := aud)
+      <> (Options.issuer := iss)
+      <> (Options.jwtid := jti)
+      <> (Options.subject := sub)
+      <> (Options.keyid := kid)
+      <> (Options.header := signHeaderOptions)
 
 -- Utility function used to automatically convert any foreign value into a token
 foreignToToken :: forall r l s. Decodable r l => Foreign -> Either (NonEmptyList String) (Token r s)
@@ -103,7 +101,13 @@ foreign import _decode :: Fn3 (Foreign -> Maybe Foreign) (Maybe Foreign) String 
 decode :: forall r l. Decodable r l => String -> Either (NonEmptyList String) (Token r Unverified)
 decode s = (note (singleton "Couldn't decode token") $ runFn3 _decode Just Nothing s) >>= foreignToToken
 
+decode' :: String -> Either (NonEmptyList String) (Token () Unverified)
+decode' = decode
+
 foreign import _verify :: Fn4 (Foreign -> Maybe Foreign) (Maybe Foreign) String String (Maybe Foreign)
 
 verify :: forall r l. Decodable r l => Secret -> String -> Either (NonEmptyList String) (Token r Verified)
-verify (Secret secret) s = (note (singleton "Couldn't verify token") $ runFn4 _verify Just Nothing secret s) >>= foreignToToken
+verify (Secret secret) s = (note (singleton "Couldn't verify token") $ runFn4 _verify Just Nothing s secret) >>= foreignToToken
+
+verify' :: Secret -> String -> Either (NonEmptyList String) (Token () Unverified)
+verify' = verify
