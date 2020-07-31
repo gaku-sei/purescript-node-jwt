@@ -117,7 +117,7 @@ type Claims r
     , nbf :: Maybe NumericDate
     , iat :: Maybe NumericDate
     , jti :: Maybe String
-    , unregistered :: Maybe (Record r)
+    , unregisteredClaims :: Maybe (Record r)
     }
 
 data Verified
@@ -138,7 +138,7 @@ defaultClaims =
   , nbf: Nothing
   , iat: Nothing
   , jti: Nothing
-  , unregistered: Nothing
+  , unregisteredClaims: Nothing
   }
 
 newtype Secret
