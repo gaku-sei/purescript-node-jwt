@@ -4,9 +4,10 @@ import Data.Either (Either)
 import Data.Functor.Contravariant (cmap)
 import Data.Maybe (Maybe)
 import Data.Options (Option, opt, optional)
-import Foreign.Generic (class Encode, Foreign, encode)
+import Foreign.Generic (Foreign, encode)
 import Prelude (($), (<<<))
 import Types (Algorithm, EitherWrapper(..), NumericDate, Typ)
+import GenericRecord (class Encodable)
 
 foreign import data SignOptions :: Type
 
@@ -56,5 +57,5 @@ nbf = optional $ cmap encode $ opt "nbf"
 exp :: Option PayloadOptions (Maybe NumericDate)
 exp = optional $ cmap encode $ opt "exp"
 
-unregistered :: forall a. Encode a => Option PayloadOptions (Maybe a)
+unregistered :: forall r l. Encodable r l => Option PayloadOptions (Maybe (Record r))
 unregistered = optional $ cmap encode $ opt "unregistered"
