@@ -393,10 +393,10 @@ semver@^5.6.0:
   resolved "https://registry.yarnpkg.com/semver/-/semver-5.7.1.tgz#a954f931aeba508d307bbf069eff0c01c96116f7"
   integrity sha512-sauaDf/PZdVgrLTNYHRtpXa1iRiKcaebiKQ1BJdpQlWH2lCvexQdX55snPFyK7QzpudqbCI0qXFfOasHdyNDGQ==
 
-spago@^0.15.3:
-  version "0.15.3"
-  resolved "https://registry.yarnpkg.com/spago/-/spago-0.15.3.tgz#348de88f2aa499abaee9289b7d66e1e049807f0c"
-  integrity sha512-CNpbJiI+6MPpttbCtGIGFUroegXze4I7joXCTfiiTRzOUKcMV925fm7dxyAa3AVUUUvGi3D55k65aniGR1cVMA==
+spago@^0.16.0:
+  version "0.16.0"
+  resolved "https://registry.yarnpkg.com/spago/-/spago-0.16.0.tgz#25e04574d9b34251a9f653c2c01d2dce3103ed27"
+  integrity sha512-I7CpLNM+3EPqLeqrhQHPa8U7J1C90XzMIzrzDtlZQ0TeloseulopTd5l2hzhjaj5DrcVtYhYkh3DVY1QDh8+ZA==
   dependencies:
     request "^2.88.0"
     tar "^4.4.8"
