@@ -1,5 +1,5 @@
 module Node.Jwt
-  ( module Types
+  ( module Node.Jwt.Types
   , decode
   , decode'
   , sign
@@ -7,7 +7,6 @@ module Node.Jwt
   , verify'
   ) where
 
-import Types
 import Control.Monad.Except (runExcept)
 import Control.Promise (Promise, toAffE)
 import Data.Bifunctor (lmap)
@@ -24,9 +23,10 @@ import Foreign (ForeignError, readNullOrUndefined, readString, renderForeignErro
 import Foreign.Generic (F, Foreign)
 import Foreign.Generic (decode, encode) as Generic
 import Foreign.Index ((!))
-import Options as Options
+import Node.Jwt.GenericRecord (class Decodable, class Encodable)
+import Node.Jwt.Options as Options
+import Node.Jwt.Types
 import Prelude (bind, map, pure, ($), (<$>), (<*>), (<>), (>>=))
-import GenericRecord (class Decodable, class Encodable)
 
 -- Extract JWT claims from any foreign value
 claims :: forall r l. Decodable r l => Foreign -> Either (NonEmptyList ForeignError) (Claims r)

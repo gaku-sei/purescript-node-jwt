@@ -1,4 +1,4 @@
-module GenericRecord where
+module Node.Jwt.GenericRecord where
 
 import Foreign.Generic.Class (class DecodeRecord, class EncodeRecord)
 import Prim.RowList (class RowToList)

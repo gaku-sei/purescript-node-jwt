@@ -1,12 +1,12 @@
-module Options where
+module Node.Jwt.Options where
 
 import Data.Either (Either)
 import Data.Functor.Contravariant (cmap)
 import Data.Maybe (Maybe)
 import Data.Options (Option, opt, optional)
 import Foreign.Generic (Foreign, encode)
+import Node.Jwt.Types (Algorithm, EitherWrapper(..), NumericDate, Typ)
 import Prelude (($), (<<<))
-import Types (Algorithm, EitherWrapper(..), NumericDate, Typ)
 
 foreign import data SignOptions :: Type
 

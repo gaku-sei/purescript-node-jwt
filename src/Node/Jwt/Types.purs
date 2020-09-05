@@ -1,4 +1,4 @@
-module Types where
+module Node.Jwt.Types where
 
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (throwError)
