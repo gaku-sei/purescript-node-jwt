@@ -11,6 +11,6 @@
     "jsonwebtoken": "^8.5.1"
   },
   "devDependencies": {
-    "spago": "^0.15.3"
+    "spago": "^0.16.0"
   }
 }
