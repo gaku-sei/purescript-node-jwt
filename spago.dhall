@@ -7,7 +7,6 @@
   , "console"
   , "effect"
   , "foreign-generic"
-  , "generics-rep"
   , "newtype"
   , "psci-support"
   , "options"
