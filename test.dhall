@@ -4,5 +4,5 @@ in    conf
     ⫽ { sources =
           conf.sources # [ "test/**/*.purs" ]
       , dependencies =
-          conf.dependencies # [ "record", "spec" ]
+          conf.dependencies # [ "record", "spec", "now" ]
       }

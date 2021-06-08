@@ -4,12 +4,25 @@
 , dependencies =
   [ "aff"
   , "aff-promise"
+  , "bifunctors"
   , "console"
+  , "contravariant"
+  , "control"
+  , "datetime"
   , "effect"
+  , "either"
+  , "foldable-traversable"
+  , "foreign"
   , "foreign-generic"
+  , "functions"
+  , "integers"
+  , "lists"
+  , "maybe"
   , "newtype"
-  , "psci-support"
   , "options"
+  , "prelude"
+  , "psci-support"
+  , "transformers"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs" ]
