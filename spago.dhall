@@ -5,7 +5,6 @@
   [ "aff"
   , "aff-promise"
   , "bifunctors"
-  , "console"
   , "contravariant"
   , "control"
   , "datetime"
