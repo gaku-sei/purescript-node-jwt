@@ -6,11 +6,11 @@ import Data.DateTime (DateTime)
 import Data.DateTime.Instant (fromDateTime, instant, toDateTime, unInstant)
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor)
 import Data.List.NonEmpty (singleton)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Show.Generic (genericShow)
 import Data.Traversable (traverse)
 import Effect.Aff (Milliseconds(..))
 import Foreign (ForeignError(..), readArray, readNumber, readString)
@@ -124,6 +124,7 @@ data Verified
 
 data Unverified
 
+type Token :: forall k. Row Type -> k -> Type
 type Token a s
   = { headers :: JOSEHeaders
     , claims :: Claims a
