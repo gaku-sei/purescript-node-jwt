@@ -18,11 +18,13 @@
   , "lists"
   , "maybe"
   , "newtype"
+  , "now"
   , "options"
   , "prelude"
-  , "psci-support"
+  , "record"
+  , "spec"
   , "transformers"
   ]
 , packages = ./packages.dhall
-, sources = [ "src/**/*.purs" ]
+, sources = [ "src/**/*.purs", "test/**/*.purs" ]
 }

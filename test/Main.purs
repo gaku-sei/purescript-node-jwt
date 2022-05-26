@@ -5,7 +5,7 @@ import Data.DateTime.Instant (instant, toDateTime)
 import Data.Either (Either(..), hush)
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Newtype (wrap)
-import Data.Symbol (SProxy(..))
+import Type.Proxy (Proxy(..))
 import Data.Time.Duration (Seconds(..))
 import Effect (Effect)
 import Effect.Aff (Milliseconds(..), launchAff_)
@@ -21,7 +21,7 @@ import Test.Spec.Reporter (consoleReporter)
 import Test.Spec.Runner (runSpec)
 
 cleanClaims :: forall r a. Lacks "unregisteredClaims" r => { unregisteredClaims :: a | r } -> { | r }
-cleanClaims = delete (SProxy :: SProxy "unregisteredClaims")
+cleanClaims = delete (Proxy :: Proxy "unregisteredClaims")
 
 getTimestamp :: forall m. MonadEffect m => m DateTime
 getTimestamp = liftEffect $ modifyTime (setMillisecond bottom) <<< toDateTime <$> now
